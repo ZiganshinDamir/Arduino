@@ -1,0 +1,32 @@
+void setup() {
+  pinMode(8, OUTPUT);    // Красный //
+  pinMode(10, OUTPUT);  // Желтый  //
+  pinMode(12, OUTPUT); // Зеленый //
+  
+}
+void loop() {
+  digitalWrite(8, HIGH);     
+  delay(3000);              
+  digitalWrite(10, HIGH);   
+  delay(1000);
+  digitalWrite(8, LOW);
+  digitalWrite(10, LOW);
+  digitalWrite(12, HIGH);
+  delay(3000);
+  digitalWrite(12, LOW);
+  delay(500);
+  digitalWrite(12, HIGH);
+  delay(500);
+  digitalWrite(12, LOW);
+  delay(500);
+  digitalWrite(12, HIGH);
+  delay(500);
+  digitalWrite(12, LOW);
+  delay(500);
+  digitalWrite(12, HIGH);
+  delay(500);
+  digitalWrite(12, LOW);
+  digitalWrite(10, HIGH);
+  delay(1000);
+  digitalWrite(10, LOW);  
+}
