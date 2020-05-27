@@ -1,0 +1,214 @@
+#include <SoftwareSerial.h>
+#include <Wire.h>
+#include <LiquidCrystal_I2C_Ext.h>
+#include<Servo.h>
+#include<OneWire.h>
+#include<DallasTemperature.h>
+#include <iarduino_RTC.h>
+SoftwareSerial mySerial(9, 8);          // Выводы SIM800L Tx & Rx
+LiquidCrystal_I2C_Ext lcd(0x27, 16, 2);
+OneWire oneWire(3);
+DallasTemperature ds(&oneWire);
+iarduino_RTC time(RTC_DS1307);
+DeviceAddress sensor1 = {0x28, 0xB0, 0xC7, 0xF2, 0x1E, 0x19, 0x1, 0xA2};
+DeviceAddress sensor2 = {0x28, 0xD9, 0x73, 0xD8, 0x1E, 0x19, 0x1, 0xCC};
+
+// Пины для энкодера
+#define pinCLK 5
+#define pinDT  6
+#define pinSW  7
+#define STOP 0
+#define START 1
+#define WORK  2
+
+Servo Serv;
+int Twork = 53;   //  температура минимум         ///// для WORK
+int Tmax = 80;     // температура максимум                       ////////
+int Talarm = 83;    //   температура включения сигнализации
+int temp1;
+int temp2;
+int state;
+int index;
+int gradus;
+int N = 2;
+int ugol = 70;
+byte E;
+char incomingByte;
+String inputString;
+
+// Перечислим значения, используемые в меню для задания связи родитель-потомок
+enum {mkBack, mkRoot, mkRun, mkOptions, mkMode, mkTime, mkTemp, mkServo, mkHelp, mkFAQ, mkIndex, mkAbout};
+
+// Опишем меню
+sMenuItem menu[] = {
+  {mkBack, mkRoot, "Menu"},
+  {mkRoot, mkRun, "Run"},
+  {mkRoot, mkOptions, "Options"},
+  {mkOptions, mkMode, "Mode"},
+  //{mkOptions, mkTime, "Time"},
+  {mkOptions, mkTemp, "Temp"},
+  // {mkOptions, mkServo, "Servo"},
+  {mkOptions, mkBack, "Back"},
+  {mkRoot, mkHelp, "Help"},
+  {mkHelp, mkFAQ, "FAQ"},
+  {mkHelp, mkIndex, "Index"},
+  {mkHelp, mkAbout, "About"},
+  {mkHelp, mkBack, "Back"},
+  {mkRoot, mkBack, "Exit menu"}
+};
+
+// Определим колчество элементов в меню
+uint8_t menuLen = sizeof(menu) / sizeof(sMenuItem);
+void setup() {
+  lcd.begin();
+  lcd.attachEncoder(pinDT, pinCLK, pinSW);
+  time.begin();
+  time.settime (0, 36, 21, 04, 20, 4);  // сек,  мин,  час,  месяц,  год, день недели
+  Serv.attach(4);
+  lcd.begin(); // инициализация дисплея
+  lcd.backlight(); // вкл подсветки дисплея
+  ds.setResolution(9); // устанавливаем разрешение датчика от 9 до 12 бит
+  Serial.begin(9600);
+  mySerial.begin(19200);                 // Инициализация последовательной связи с Arduino и SIM800L
+  char temp2 = sensor2;
+  char temp1 = sensor1;
+  E = ds.getDeviceCount();
+  Serv.write(1);
+  mySerial.println("AT");                // Отправка команды AT
+  mySerial.println("AT+CMGF=1");         // Выбирает формат SMS
+  mySerial.println("AT+CMGS=\"+7xxxxxxxxxx\"");         // Отправка СМС на указанный номер
+  mySerial.println("AT+CNMI=1,2,0,0,0");   // Отправка команды AT+CNMI=1,2,0,0,0
+
+}
+void loop() {
+  Serial.print("1:");
+  Serial.println(state);
+  gradus = ((Twork - ds.getTempC(sensor2)) * N);
+  ds.requestTemperatures();           // считываем температуру с датчиков
+  lcd.clear();                     // очищаем дисплей
+  lcd.setCursor(0, 1);            //устанавливаем курсор на первую строчку и первый символ (счёт начинается с 0, первая цифра - это символ, вторая - строка)
+  if (state == 0) lcd.print("STOP");
+  else if (state == 1) lcd.print("START");
+  else if (state == 2) lcd.print("WORK");
+  lcd.setCursor(0, 0);             //устанавливаем курсор на первую строчку и пятый символ (счёт начинается с 0, первая цифра - это символ, вторая - строка)
+  lcd.print(gradus);
+  lcd.setCursor(3, 0);             //устанавливаем курсор на первую строчку и пятый символ (счёт начинается с 0, первая цифра - это символ, вторая - строка)
+  lcd.print(Serv.read());
+  lcd.setCursor(6, 0);             //устанавливаем курсор на первую строчку и пятый символ (счёт начинается с 0, первая цифра - это символ, вторая - строка)
+  lcd.print("T1=");
+  lcd.print(ds.getTempC(sensor1));
+  lcd.setCursor(11, 0);                //устанавливаем курсор на первую строчку и одиннадцатый символ (счёт начинается с 0, первая цифра - это символ, вторая - строка)
+  lcd.print("T2=");
+  lcd.print(ds.getTempC(sensor2));
+  lcd.setCursor(8, 1);
+  lcd.printf(time.gettime("H:i:s"));
+  delay(1000);
+  Serial.print("3:");
+  Serial.println(state);
+  eEncoderState EncoderState = lcd.getEncoderState();
+  switch (EncoderState) {
+    case eButton: // При нажатии включаем меню
+      uint8_t selectedMenuItem = lcd.showMenu(menu, menuLen, 1);
+      if (selectedMenuItem == mkMode) {
+        String list[] = {"Stop", "Start"};
+        index = lcd.selectVal("Status:", list, 2, STOP);
+        state = index;
+        lcd.printf("Status: %s", list[index].c_str());
+        Serial.print("2:");
+        Serial.println(state);
+      }
+      if (selectedMenuItem == mkTemp) {
+        Twork = lcd.inputVal("Twork", 0, 100, Twork, 1);    // 0-100 диапазон  значение, 0- начальное значение, 1- шаг.
+        Tmax = lcd.inputVal("Tmax", 0, 100, Tmax, 1);
+        N = lcd.inputVal("Mnoshitel", 0, 10, N, 1);
+        ugol = lcd.inputVal("Ugol", 0, 100, ugol, 1);
+        Talarm = lcd.inputVal("Talarm", 0, 100, Talarm, 1);
+      }
+    case eNone: // Состояние энкодера не изменилось. Выходим из функции
+      return;
+  }
+  statuse();
+  alarm();
+
+  if (mySerial.available()) {                     // Проверяем, если есть доступные данные
+    delay(100);                                 // Пауза
+
+    while (mySerial.available()) {              // Проверяем, есть ли еще данные.
+      incomingByte = mySerial.read();             // Считываем байт и записываем в переменную incomingByte
+      inputString += incomingByte;                // Записываем считанный байт в массив inputString
+    }
+
+    delay(10);                                  // Пауза
+    Serial.println(inputString);                // Отправка в "Мониторинг порта" считанные данные
+    inputString.toUpperCase();                  // Меняем все буквы на заглавные
+
+    if (inputString.indexOf("Status") > -1)
+      mySerial.println("T1: " + String(temp1) + "T2: " + String(temp2) + "State: " + String(state));
+  }
+}
+  void statuse() {
+    // СТАТУСЫ КОТЛА
+    switch (state) {
+      case (1):
+        state = START;
+        if (ds.getTempC(sensor2) < 45) {
+          delay(500);
+          Serv.write(ugol);
+        }
+        if (ds.getTempC(sensor2) > 45)
+          state = WORK;
+        break;
+
+      case (2):
+        delay(1000);
+        if (ds.getTempC(sensor2) > 45)
+          delay(1000);
+        Serv.write(gradus);
+        state = WORK;
+        if (ds.getTempC(sensor2) < 45)
+          state = STOP;
+        break;
+
+      case (0):
+        state = STOP;
+        if (ds.getTempC(sensor2) < 45) {
+          Serv.write(0);
+          delay(500);
+        }
+        Serial.println("STOP");
+        break;
+    }
+    Serial.print("4:");
+    Serial.println(state);
+  }
+
+  void alarm() {
+    ds.requestTemperatures();
+    ds.begin();
+    if (ds.getDeviceCount() != E) {
+      lcd.clear();
+      lcd.setCursor(4, 0);
+      lcd.print("(Ds ERROR)");
+      for (int i = 0; i < 4; i++) {
+        mySerial.print("Ds ERROR");// Текст сообщения
+      }
+
+      mySerial.write(26);
+      state = STOP;
+      Serv.write(0);
+      delay(5000);
+    }
+    if (ds.getTempC(sensor1) > Talarm) {
+      state = STOP;
+      lcd.clear();
+      Serv.write(0);
+      for (int i = 0; i < 4; i++) {
+        mySerial.print("Maximum temperature exceeded");// Текст сообщения
+      }
+      mySerial.write(26);
+      lcd.setCursor(4, 0); lcd.print("(ALARM)");
+      lcd.setCursor(6, 1); lcd.print(int(ds.getTempC(sensor2)));
+      delay(5000);
+    }
+
+  }
