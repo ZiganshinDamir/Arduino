@@ -1,0 +1,140 @@
+#include <SD.h>
+#include <Blynk.h>
+#include <BlynkSimpleSerialBLE.h>
+// подключение библиотеки для работы с дисплеем
+#include <LiquidCrystal_I2C.h>
+#include <Wire.h>
+// пины дисплея
+#define SDA 3
+#define SCL 2
+// создание объекта для работы с дисплеем
+LiquidCrystal_I2C lcd(0x27, 20, 4);
+char auth[] = "YourAuthToken";// ваш личный код от blynk
+#define BLYNK_PRINT Serial
+// пин для получения аналогового значения с датчика MQ9
+#define MQ9_PIN A0          //    +
+#define MQ3_PIN A1           //   +
+#define MQ137_PIN A2        // NH3 +
+#define MQ135_PIN A3        //     +
+#define ES4_PIN A4 // NO2 +
+#define MP3_PIN A5         //     +
+#define MP7_PIN A6         //  CO +
+// переменные для хранения значения, полученного с датчика MQ9
+float MQ9Value;
+float MQ3Value;
+float MQ137Value;
+float MQ135Value;
+float ES4Value;
+float MP3Value;
+float MP7Value;
+// переменные для хранения уровня газа в процентах
+float MQ9Percents;
+float MQ3Percents;
+float MQ137Percents;
+float MQ135Percents;
+float ES4Percents;
+float MP3Percents;
+float MP7Percents;
+
+#define float GO;
+#define float G1;
+#define float G2;
+#define float G3;
+#define float G4;
+#define float G5;
+#define float G6;
+File myFile;
+
+void setup()
+{
+  // инициализация дисплея
+  lcd.init(); // инициализация LCD дисплея
+  lcd.backlight(); // включение подсветки дисплея
+  Serial.begin(9600);
+  Blynk.begin(Serial, auth);
+
+}
+
+void loop()
+{
+  // получаем значение от датчиков
+  MQ3Value = analogRead(MQ3_PIN);
+  MQ9Value = analogRead(MQ9_PIN);
+  ES4Value = analogRead(ES4_PIN);
+  MP7Value = analogRead(MP7_PIN);
+  MQ137Value = analogRead(MQ137_PIN);
+  MQ135Value = analogRead(MQ135_PIN);
+  MP3Value = analogRead(MP3_PIN);
+
+  // переводим значение в проценты
+  MQ3Percents = MQ3Value / 1024 * 100;
+  MQ9Percents = MQ9Value / 1024 * 100;
+  ES4Percents = ES4Value / 1024 * 100;
+  MP7Percents = MP7Value / 1024 * 100;
+  MQ137Percents = MQ137Value / 1024 * 100;
+  MQ135Percents = MQ135Value / 1024 * 100;
+  MP3Percents = MP3Value / 1024 * 100;
+
+  // вывод процентов на дисплей
+  lcd.setCursor(0, 0);
+  lcd.print("Ugar gaz: "); lcd.print(MQ9Percents / 1000);
+  lcd.setCursor(0, 1);
+  lcd.print("NO2: ");    lcd.print(ES4Percents / 1000);
+  lcd.setCursor(0, 2);
+  lcd.print("CO: "); lcd.print(MP7Percents / 1000);
+  lcd.setCursor(0, 3);
+  lcd.print("Algogol: "); lcd.print(MQ3Percents / 1000);
+  lcd.setCursor(5, 0);
+  lcd.print("NH3: "); lcd.print(MQ137Percents / 1000);
+  lcd.setCursor(5, 1);
+  lcd.print("MQ135: "); lcd.print(MQ135Percents / 1000);
+  lcd.setCursor(5, 2);
+  lcd.print("MP3: "); lcd.print(MP3Percents / 1000);
+  delay(1000);
+
+
+  if (SD.begin())
+  {
+    Serial.println("SD card is ready to use.");
+  }
+  else
+  {
+    Serial.println("SD card initialization failed");
+    return;
+    myFile = SD.open("test.txt", FILE_WRITE);     // Открытие файла, одновременно может быть открыт только один файл
+    if (myFile) {
+      myFile.print("Ugar gaz: ");             // Запись текста в файл.
+      myFile.print(MQ9Percents / 1000);                          // Запись текста в файл.
+      myFile.println("NO2: ");
+      myFile.print(ES4Percents / 1000);
+      myFile.println("CO: ");
+      myFile.print(MP7Percents / 1000);
+      myFile.println("Algogol: ");
+      myFile.print(MQ3Percents / 1000);
+      myFile.println("NH3: ");
+      myFile.print(MQ137Percents / 1000);
+      myFile.println("MQ135: ");
+      myFile.print(MQ135Percents / 1000);
+      myFile.println("MP3: ");
+      myFile.print(MP3Percents / 1000);
+      myFile.close();
+    }
+    else {
+      Serial.println("error opening test.txt");
+    }
+  }
+
+  Blynk.run();
+  sendSensor();
+}
+  void sendSensor()
+  {
+
+    Blynk.virtualWrite(V0, MQ9Percents / 1000);
+    Blynk.virtualWrite(V1, ES4Percents / 1000);
+    Blynk.virtualWrite(V2, MP3Percents / 1000);
+    Blynk.virtualWrite(V3, MP7Percents / 1000);
+    Blynk.virtualWrite(V4, MQ3Percents / 1000);
+    Blynk.virtualWrite(V5, MQ137Percents / 1000);
+    Blynk.virtualWrite(V6, MQ135Percents / 1000);
+  }
